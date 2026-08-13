@@ -35,3 +35,6 @@ Thumbs.db
 
 # npm cache (local mirror)
 .npm-cache/
+
+# corepack cache (local mirror)
+.corepack/

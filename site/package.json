@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "name": "watermark-zhan-web",
+  "private": true,
+  "description": "水印斩 Web 复刻版（零依赖原生前端，GitHub Pages 部署）"
+}
