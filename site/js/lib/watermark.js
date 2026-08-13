@@ -1,5 +1,6 @@
 // 去水印处理：裁剪掉水印区域后本地重编码导出（纯前端，无需登录）
-// 原理：豆包/Seedance 水印固定在下角 → 用 canvas 裁掉该区域 → MediaRecorder 重编码为 mp4/webm
+// 兼容性要点：webm(vp8/vp9) 优先（Chromium/Edge 最稳）；mp4 仅作 Safari 回退；
+// 视频/画布挂载到 DOM（否则部分浏览器 rAF/rVFC 不触发导致空输出）；失败自动无音频重试
 
 const CORNERS = {
   br: { label: '右下角', crop: (w, h, r) => ({ x: 0, y: 0, w: Math.round(w * (1 - r)), h: Math.round(h * (1 - r)) }) },
@@ -10,21 +11,29 @@ const CORNERS = {
 
 export const WATERMARK_CORNERS = CORNERS;
 
+/** webm 优先，mp4 兜底（Safari） */
 function pickMime() {
-  const candidates = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  const candidates = [
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+    'video/mp4',
+    'video/mp4;codecs=avc1',
+  ];
   for (const m of candidates) {
     try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; } catch { /* ignore */ }
   }
   return 'video/webm';
 }
 
-/** 加载视频（referrer:'' 绕过防盗链），返回 video 元素 */
 function loadVideo(url) {
   return new Promise((resolve, reject) => {
     const v = document.createElement('video');
     v.playsInline = true;
-    v.volume = 0; // 保留音频轨道但静音（muted 会掐掉音频轨）
+    v.muted = true; // 静音播放：自动播放策略不拦截（手势会在异步加载期间过期）
     v.setAttribute('referrerpolicy', 'no-referrer');
+    v.style.cssText = 'position:fixed;opacity:0;width:2px;height:2px;pointer-events:none;';
+    document.body.appendChild(v); // 挂载到 DOM：保证 rAF/rVFC 正常触发
     v.src = url;
     v.onloadeddata = () => resolve(v);
     v.onerror = () => reject(new Error('视频加载失败'));
@@ -35,81 +44,95 @@ function loadVideo(url) {
 /**
  * 裁剪重编码去水印
  * @param {string} url 视频地址
- * @param {object} opts { corner: 'br'|'bc'|'bl'|'tr', ratio: 裁剪比例(0-1) }
+ * @param {object} opts { corner, ratio }
  * @param {(p:number, msg:string)=>void} onProgress
- * @returns {Promise<{blob: Blob, ext: string}>}
  */
 export async function removeWatermarkByCrop(url, { corner = 'br', ratio = 0.12 } = {}, onProgress) {
   const spec = CORNERS[corner] || CORNERS.br;
   const video = await loadVideo(url);
-  const w = video.videoWidth;
-  const h = video.videoHeight;
-  const crop = spec.crop(w, h, ratio);
-  if (crop.w < 10 || crop.h < 10) throw new Error('裁剪区域过小');
-
-  const canvas = document.createElement('canvas');
-  canvas.width = crop.w;
-  canvas.height = crop.h;
-  const ctx = canvas.getContext('2d');
-
-  const stream = canvas.captureStream(30);
-  // 附加音轨
   try {
-    const vs = video.captureStream ? video.captureStream() : null;
-    const at = vs && vs.getAudioTracks && vs.getAudioTracks();
-    if (at && at.length) stream.addTrack(at[0]);
-  } catch { /* 无音轨则静音输出 */ }
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    const crop = spec.crop(w, h, ratio);
+    if (crop.w < 10 || crop.h < 10) throw new Error('裁剪区域过小');
 
-  const mime = pickMime();
-  const isMp4 = mime.indexOf('mp4') !== -1;
-  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000, audioBitsPerSecond: 128000 });
-  const chunks = [];
-  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-  const stopped = new Promise((res) => { rec.onstop = () => res(new Blob(chunks, { type: mime.split(';')[0] })); });
+    const canvas = document.createElement('canvas');
+    canvas.width = crop.w;
+    canvas.height = crop.h;
+    canvas.style.cssText = 'position:fixed;opacity:0;width:2px;height:2px;pointer-events:none;';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
 
-  await video.play();
+    const mime = pickMime();
+    const isMp4 = mime.indexOf('mp4') !== -1;
 
-  // 健壮性：确认视频真的在播放（部分浏览器/网络下 play() 静默失败）
-  const stallTimer = setTimeout(() => {
+    await video.play();
+
+    // 播放确认后恢复音频（captureStream 取原始音频数据，不受音量影响）
+    await new Promise((r) => setTimeout(r, 1200));
     if (video.currentTime < 0.05 && video.duration > 1) {
-      try { rec.stop(); } catch { /* ignore */ }
-      video.pause();
+      throw new Error('视频未能开始播放，请检查网络后重试');
     }
-  }, 3000);
-  await new Promise((r) => setTimeout(r, 2500));
-  clearTimeout(stallTimer);
-  if (video.currentTime < 0.05 && video.duration > 1) {
-    throw new Error('视频未能开始播放，请检查网络后重试');
-  }
+    video.muted = false;
+    video.volume = 0;
 
-  rec.start(500);
+    // 绘制循环（rAF 为主，稳定跨浏览器）
+    let rafId = 0;
+    const draw = () => ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+    const loop = () => { draw(); rafId = requestAnimationFrame(loop); };
+    draw(); // 预热一帧
+    loop();
 
-  const draw = () => ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
-  let raf = 0;
-  if ('requestVideoFrameCallback' in video) {
-    const tick = () => { video.requestVideoFrameCallback(() => { draw(); tick(); }); };
-    tick();
-  } else {
-    const iv = setInterval(draw, 33);
-    raf = iv;
-  }
+    // 音轨（可选，失败自动无音频重试）
+    let audioTrack = null;
+    try {
+      const vs = video.captureStream ? video.captureStream() : null;
+      const at = vs && vs.getAudioTracks && vs.getAudioTracks();
+      if (at && at.length) audioTrack = at[0];
+    } catch { /* ignore */ }
 
-  // 进度
-  const progTimer = setInterval(() => {
-    if (onProgress && video.duration) onProgress(Math.min(1, video.currentTime / video.duration), '正在处理…');
-  }, 300);
-
-  const finish = () => {
-    if (rec.state === 'recording') rec.stop();
-    clearInterval(progTimer);
-    if (raf) clearInterval(raf);
+    let blob = await record(canvas, video, { mime, audioTrack, onProgress, duration: video.duration });
+    if (blob.size < 1000 && audioTrack) {
+      // 音频轨疑似导致空输出 → 重试一次不带音频
+      blob = await record(canvas, video, { mime, audioTrack: null, onProgress, duration: video.duration });
+    }
+    if (blob.size < 1000) {
+      throw new Error('处理输出为空（浏览器编码器异常），请改用 Chrome/Edge 最新版重试');
+    }
+    return { blob, ext: isMp4 ? 'mp4' : 'webm' };
+  } finally {
     video.pause();
-  };
+    video.removeAttribute('src');
+    video.load();
+    video.remove();
+  }
+}
 
-  video.onended = finish;
-  setTimeout(finish, video.duration * 1000 + 8000); // 兜底
+function record(canvas, video, { mime, audioTrack, onProgress, duration }) {
+  return new Promise((resolve) => {
+    const stream = canvas.captureStream(30);
+    if (audioTrack) {
+      try { stream.addTrack(audioTrack); } catch { /* ignore */ }
+    }
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000, audioBitsPerSecond: 128000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => resolve(new Blob(chunks, { type: mime.split(';')[0] }));
 
-  const blob = await stopped;
-  if (blob.size < 1000) throw new Error('处理输出为空（浏览器编码器不可用，请换用 Chrome/Edge）');
-  return { blob, ext: isMp4 ? 'mp4' : 'webm' };
+    const progTimer = setInterval(() => {
+      if (onProgress && duration) onProgress(Math.min(1, video.currentTime / duration), '正在处理…');
+    }, 300);
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearInterval(progTimer);
+      if (rec.state === 'recording') rec.stop();
+    };
+    video.onended = finish;
+    setTimeout(finish, duration * 1000 + 10000);
+
+    rec.start(1000);
+  });
 }
