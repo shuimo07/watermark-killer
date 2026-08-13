@@ -46,3 +46,6 @@ test-flow.html
 test-app-flow.html
 
 test-video-sanity.html
+
+# local temp (E drive redirect)
+.tmp/
