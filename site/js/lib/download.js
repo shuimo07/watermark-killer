@@ -1,10 +1,16 @@
 // 下载与保存工具
 import { proxyFetch } from './proxy.js';
 
-/** 通过 CORS 代理下载为 Blob（视频较大时可能较慢） */
+/** 下载 Blob：优先直连（CDN 开放 CORS 时，如豆包视频），失败回退 CORS 代理 */
 export async function fetchBlob(url) {
-  const res = await proxyFetch(url, { timeout: 120000 });
-  return res.blob();
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (res.ok) return await res.blob();
+    throw new Error('HTTP ' + res.status);
+  } catch {
+    const res = await proxyFetch(url, { timeout: 120000 });
+    return res.blob();
+  }
 }
 
 /** 触发浏览器下载 */

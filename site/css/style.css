@@ -1,11 +1,12 @@
-/* 水印斩 Web 版 · 移动端优先 */
+/* Watermark_killer · 移动端优先（浅蓝 + 黑 主题） */
 :root {
-  --primary: #005bc1;
-  --primary-dark: #004a9e;
-  --primary-light: #e8f1fc;
-  --bg: #f0f4f9;
+  --primary: #4a9eff;
+  --primary-dark: #2f86f5;
+  --primary-light: #e8f3ff;
+  --ink: #111111;
+  --bg: #f5f7fa;
   --card: #ffffff;
-  --text: #1f2329;
+  --text: #111111;
   --text-2: #6b7280;
   --border: #e5eaf0;
   --danger: #e5484d;
@@ -27,15 +28,15 @@ body {
   min-height: 100vh;
 }
 
-/* 头部 */
+/* 头部（黑底 + 浅蓝品牌） */
 .app-header {
   position: sticky; top: 0; z-index: 20;
-  background: var(--primary);
+  background: var(--ink);
   color: #fff;
-  box-shadow: 0 1px 6px rgba(0, 91, 193, 0.35);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
 }
 .header-inner { display: flex; align-items: baseline; gap: 10px; padding: 14px 16px; }
-.brand { font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+.brand { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; color: #7cc0ff; }
 .header-sub { font-size: 12px; opacity: 0.85; }
 
 .app-main { padding: 14px 14px 30px; }

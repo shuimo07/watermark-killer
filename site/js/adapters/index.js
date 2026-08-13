@@ -1,4 +1,5 @@
 // 适配器统一入口
+import * as doubao from './doubao.js';
 import * as douyin from './douyin.js';
 import * as kuaishou from './kuaishou.js';
 import * as weishi from './weishi.js';
@@ -6,7 +7,7 @@ import * as weibo from './weibo.js';
 import * as xiaohongshu from './xiaohongshu.js';
 import * as taobao from './taobao.js';
 
-export const adapters = { douyin, kuaishou, weishi, weibo, xiaohongshu, taobao };
+export const adapters = { doubao, douyin, kuaishou, weishi, weibo, xiaohongshu, taobao };
 
 /**
  * 统一解析入口

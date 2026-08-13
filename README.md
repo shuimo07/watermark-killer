@@ -26,3 +26,12 @@
 ## 技术栈（规划）
 
 Vite + Vue 3 + Tailwind CSS，纯静态前端，无后端，解析走第三方 CORS 代理。
+
+> **实际采用**：零依赖原生前端（ES Modules），`site/` 为站点根目录，GitHub Pages 直出。
+
+## 核心能力
+
+- **豆包视频去水印**（主功能）：`POST https://www.doubao.com/samantha/media/get_play_info`（参数 `aid=497858` 等 + JSON `{"key": video_id}`），返回 `original_media_info.main_url` 无水印直链（CDN 自带 CORS，可直连播放/下载）
+- 其他平台适配器：抖音 / 快手 / 微视 / 微博 / 小红书 / 淘宝（尽力而为）
+- CORS 代理链：corsproxy.io（放行 github.io 来源）→ 备用代理；豆包视频下载直连 CDN
+- 历史记录、解析缓存、FAQ/教程

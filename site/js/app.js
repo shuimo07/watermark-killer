@@ -1,4 +1,4 @@
-// 水印斩 Web 版 · 主控制器（路由 / 解析 / 结果 / 历史 / 缓存）
+// Watermark_killer Web 版 · 主控制器（路由 / 解析 / 结果 / 历史 / 缓存）
 import { CONFIG } from './config.js';
 import { detect, platformName, platformIcon } from './lib/platform.js';
 import { parse } from './adapters/index.js';
@@ -244,8 +244,8 @@ function renderResult(r) {
   });
   bind('act-share', () => {
     shareData({
-      title: r.title || '水印斩解析结果',
-      text: `我用「水印斩」解析了${platformName(r.platform)}内容`,
+      title: r.title || 'Watermark_killer 解析结果',
+      text: `我用 Watermark_killer 解析了${platformName(r.platform)}内容`,
       url: r.mediaUrl || r.images?.[0] || location.href,
     }).then((ok) => { if (!ok) toast('分享不可用'); });
   });

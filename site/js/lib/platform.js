@@ -2,6 +2,7 @@
 import { CONFIG } from '../config.js';
 
 const RULES = [
+  { platform: 'doubao', name: '豆包', match: /doubao\.com/i, re: /https?:\/\/[^\s"'<>，。；]+/g },
   { platform: 'douyin', name: '抖音', match: /(?:v\.douyin\.com|douyin\.com|iesdouyin\.com)/i, re: /https?:\/\/[^\s"'<>，。；]+/g },
   { platform: 'kuaishou', name: '快手', match: /(?:v\.kuaishou\.com|kuaishou\.com|kuaishouapp\.com|chenzhongtech\.com)/i, re: /https?:\/\/[^\s"'<>，。；]+/g },
   { platform: 'weishi', name: '微视', match: /h5\.weishi\.qq\.com/i, re: /https?:\/\/[^\s"'<>，。；]+/g },

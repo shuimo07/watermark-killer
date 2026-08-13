@@ -14,6 +14,7 @@ export const CONFIG = {
   timeout: 20000,
   // 平台展示名
   platformNames: {
+    doubao: '豆包',
     douyin: '抖音',
     kuaishou: '快手',
     weishi: '微视',
@@ -23,6 +24,7 @@ export const CONFIG = {
     unknown: '未知平台',
   },
   platformIcons: {
+    doubao: '🤖',
     douyin: '🎵',
     kuaishou: '📹',
     weishi: '📺',
