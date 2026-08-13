@@ -48,6 +48,8 @@ const state = {
   currentView: 'home',
   lastResult: null,
   lastParseKey: null,
+  wmCorner: 'all',
+  wmResult: null,
 };
 
 /* ---------- 路由 ---------- */
@@ -181,6 +183,7 @@ function fmtTime(ts) {
 function renderResult(r) {
   const body = $('result-body');
   $('result-platform').textContent = `${platformIcon(r.platform)} ${platformName(r.platform)}`;
+  state.wmResult = null; // 每次渲染新结果，清空上次去水印产物
 
   let mediaHtml = '';
   if (r.type === 'video' && r.mediaUrl) {
@@ -203,16 +206,20 @@ function renderResult(r) {
   if (r.type === 'video' && r.mediaUrl) {
     const wmCard = r.platform === 'doubao'
       ? `<div class="wm-card">
-          <div class="wm-title">✂️ 去水印下载（裁剪水印区域，本地处理）</div>
+          <div class="wm-title">✂️ 去水印处理（自动进行中）</div>
           <div class="wm-picker" id="wm-picker">
             ${Object.entries(WATERMARK_CORNERS).map(([k, v]) => `<button class="wm-chip" data-corner="${k}">${v.label}</button>`).join('')}
           </div>
-          <div id="wm-progress" class="status-area"></div>
+          <div id="wm-progress" class="status-area loading">准备中…</div>
+          <div id="wm-preview" class="hidden">
+            <div class="wm-title">✅ 去水印完成（可预览/下载）</div>
+            <div class="video-wrap"><video controls playsinline id="wm-video"></video></div>
+          </div>
         </div>`
       : '';
     actions = `
       <div class="action-row">
-        ${r.platform === 'doubao' ? `<button class="btn-action primary" id="act-wm">✂️ 去水印下载</button>` : ''}
+        ${r.platform === 'doubao' ? `<button class="btn-action primary" id="act-wm">⏳ 处理中…</button>` : ''}
         <button class="btn-action ${r.platform === 'doubao' ? '' : 'primary'}" id="act-download">${r.platform === 'doubao' ? '⬇️ 原视频' : '⬇️ 下载视频'}</button>
         <button class="btn-action" id="act-copy">📋 复制链接</button>
         <button class="btn-action" id="act-share">↗️ 分享</button>
@@ -269,43 +276,68 @@ function renderResult(r) {
     }).then((ok) => { if (!ok) toast('分享不可用'); });
   });
 
-  // 去水印：水印位置选择
+  // 去水印：模式选择（默认全局四边）+ 切换即重新处理
   const picker = body.querySelector('#wm-picker');
   if (picker) {
-    state.wmCorner = state.wmCorner || 'br';
+    if (!state.wmCorner) state.wmCorner = 'all';
     picker.querySelectorAll('.wm-chip').forEach((chip) => {
       if (chip.dataset.corner === state.wmCorner) chip.classList.add('active');
       chip.addEventListener('click', () => {
         state.wmCorner = chip.dataset.corner;
         picker.querySelectorAll('.wm-chip').forEach((c) => c.classList.toggle('active', c === chip));
+        runWatermark(r); // 切换模式即重新处理
       });
     });
   }
-  bind('act-wm', () => doWatermarkDownload(r));
+  bind('act-wm', () => downloadWatermark(r));
+
+  // 豆包视频：解析完成后自动去水印
+  if (r.platform === 'doubao' && r.mediaUrl) {
+    runWatermark(r);
+  }
 }
 
-/** 去水印下载（裁剪重编码） */
-async function doWatermarkDownload(r) {
-  if (!r.mediaUrl) { toast('没有可处理的视频'); return; }
+/** 自动/切换模式去水印：处理并展示预览（不自动下载） */
+async function runWatermark(r) {
+  if (!r.mediaUrl) return;
   const btn = document.querySelector('#act-wm');
   const prog = document.querySelector('#wm-progress');
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '处理中…';
-  if (prog) { prog.className = 'status-area loading'; prog.textContent = '正在加载视频…'; }
+  const pv = document.querySelector('#wm-preview');
+  const ratio = (state.wmCorner === 'all') ? 0.10 : 0.12;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 处理中…'; }
+  if (prog) { prog.className = 'status-area loading'; prog.textContent = '正在下载视频…'; }
+  if (pv) pv.classList.add('hidden');
   try {
-    const { blob, ext } = await removeWatermarkByCrop(r.mediaUrl, { corner: state.wmCorner || 'br', ratio: 0.12 }, (p, msg) => {
+    const { blob, ext } = await removeWatermarkByCrop(r.mediaUrl, { corner: state.wmCorner || 'all', ratio }, (p, msg) => {
       if (prog) prog.textContent = `${msg} ${Math.round(p * 100)}%`;
     });
-    if (prog) prog.textContent = '处理完成，开始下载…';
-    saveBlob(blob, makeFilename(r.platform + '_nowm', ext));
-    toast('已下载去水印版本');
+    state.wmResult = { blob, ext };
+    // 展示去水印预览
+    if (pv) {
+      const url = URL.createObjectURL(blob);
+      const v = pv.querySelector('#wm-video');
+      if (v) { v.src = url; v.play().catch(() => {}); }
+      pv.classList.remove('hidden');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ 下载去水印视频'; }
+    if (prog) { prog.className = 'status-area'; prog.textContent = '✅ 去水印完成'; }
   } catch (e) {
-    toast('去水印失败：' + (e.message || '未知错误'));
-    if (prog) { prog.className = 'status-area error'; prog.textContent = '处理失败：' + e.message; }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = origText;
+    if (prog) { prog.className = 'status-area error'; prog.textContent = '去水印失败：' + (e.message || '未知错误'); }
+    if (btn) { btn.disabled = false; btn.textContent = '✂️ 重试去水印'; }
+  }
+}
+
+/** 下载去水印结果（已处理则直接用，未处理则先处理） */
+async function downloadWatermark(r) {
+  if (state.wmResult && state.wmResult.blob) {
+    saveBlob(state.wmResult.blob, makeFilename(r.platform + '_nowm', state.wmResult.ext));
+    toast('已下载去水印版本');
+    return;
+  }
+  await runWatermark(r);
+  if (state.wmResult && state.wmResult.blob) {
+    saveBlob(state.wmResult.blob, makeFilename(r.platform + '_nowm', state.wmResult.ext));
+    toast('已下载去水印版本');
   }
 }
 

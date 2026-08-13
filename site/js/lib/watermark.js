@@ -3,6 +3,7 @@
 // 视频/画布挂载到 DOM（否则部分浏览器 rAF/rVFC 不触发导致空输出）；失败自动无音频重试
 
 const CORNERS = {
+  all: { label: '全局（四边）', crop: (w, h, r) => ({ x: Math.round(w * r), y: Math.round(h * r), w: Math.round(w * (1 - 2 * r)), h: Math.round(h * (1 - 2 * r)) }) },
   br: { label: '右下角', crop: (w, h, r) => ({ x: 0, y: 0, w: Math.round(w * (1 - r)), h: Math.round(h * (1 - r)) }) },
   bc: { label: '底部居中', crop: (w, h, r) => ({ x: 0, y: 0, w, h: Math.round(h * (1 - r)) }) },
   bl: { label: '左下角', crop: (w, h, r) => ({ x: Math.round(w * r), y: 0, w: Math.round(w * (1 - r)), h: Math.round(h * (1 - r)) }) },
