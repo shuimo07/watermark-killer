@@ -11,6 +11,10 @@ dist-ssr/
 .env.*
 !.env.example
 
+# local SSH keys (never commit)
+.ssh/
+ssh-key/
+
 # reverse-engineering artifacts (keep out of git)
 capture/
 decompiled/
