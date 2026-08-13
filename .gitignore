@@ -58,3 +58,6 @@ test-wm2.html
 
 test-wm3.html
 .chrome-cdp/
+
+# chrome test output
+.chrome-*.html
