@@ -231,6 +231,12 @@ function renderResult(r) {
     });
   }
 
+  // 视频播放兜底：部分浏览器/WebView 忽略 referrerpolicy，自动降级为 Blob 播放（绕过防盗链）
+  if (r.type === 'video' && r.mediaUrl) {
+    const video = body.querySelector('video');
+    if (video) attachVideoFallback(video, r.mediaUrl);
+  }
+
   // 动作绑定
   const bind = (id, fn) => {
     const el = body.querySelector('#' + id);
@@ -280,6 +286,26 @@ async function downloadResult(r) {
       }
     }
   }
+}
+
+/** 视频播放兜底：直链失败时抓取为 Blob 再播放（referrer:'' 绕过 CDN 防盗链） */
+function attachVideoFallback(video, url) {
+  let tried = false;
+  video.addEventListener('error', async () => {
+    if (tried) return;
+    tried = true;
+    try {
+      toast('直链播放受限，正在切换安全播放…', 2500);
+      const res = await fetch(url, { mode: 'cors', referrer: '' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      video.src = objUrl;
+      video.play().catch(() => {});
+    } catch (e) {
+      toast('视频加载失败：' + (e.message || '未知错误'));
+    }
+  });
 }
 
 function showLightbox(src) {

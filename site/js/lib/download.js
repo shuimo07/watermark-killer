@@ -1,10 +1,10 @@
 // 下载与保存工具
 import { proxyFetch } from './proxy.js';
 
-/** 下载 Blob：优先直连（CDN 开放 CORS 时，如豆包视频），失败回退 CORS 代理 */
+/** 下载 Blob：优先直连（referrer:'' 绕过防盗链；CDN 开放 CORS 时如豆包视频），失败回退 CORS 代理 */
 export async function fetchBlob(url) {
   try {
-    const res = await fetch(url, { mode: 'cors' });
+    const res = await fetch(url, { mode: 'cors', referrer: '' });
     if (res.ok) return await res.blob();
     throw new Error('HTTP ' + res.status);
   } catch {
