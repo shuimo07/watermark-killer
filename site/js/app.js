@@ -5,6 +5,7 @@ import { parse } from './adapters/index.js';
 import { getHistory, addHistory, removeHistory, clearHistory } from './lib/history.js';
 import { fetchBlob, saveBlob, makeFilename, extFromUrl } from './lib/download.js';
 import { copyText, shareData } from './lib/share.js';
+import { getRelay, setRelay } from './lib/proxy.js';
 import { FAQ_CONTENT } from './views/faq.js';
 import { COURSE_CONTENT } from './views/course.js';
 
@@ -288,10 +289,10 @@ async function downloadResult(r) {
   }
 }
 
-/** 视频播放兜底：直链失败时抓取为 Blob 再播放（referrer:'' 绕过 CDN 防盗链） */
+/** 视频播放兜底：直链失败或长时间无数据时，抓取为 Blob 再播放（referrer:'' 绕过 CDN 防盗链） */
 function attachVideoFallback(video, url) {
   let tried = false;
-  video.addEventListener('error', async () => {
+  const doFallback = async () => {
     if (tried) return;
     tried = true;
     try {
@@ -305,7 +306,12 @@ function attachVideoFallback(video, url) {
     } catch (e) {
       toast('视频加载失败：' + (e.message || '未知错误'));
     }
-  });
+  };
+  video.addEventListener('error', doFallback);
+  // 直链 6 秒仍无数据（部分浏览器忽略 referrerpolicy 导致 403）→ 自动降级
+  setTimeout(() => {
+    if (!tried && video.readyState === 0) doFallback();
+  }, 6000);
 }
 
 function showLightbox(src) {
@@ -354,9 +360,42 @@ function renderHistory() {
 
 /* ---------- 静态页 ---------- */
 function renderFaq() {
-  $('faq-body').innerHTML = FAQ_CONTENT.map(
-    (f) => `<div class="faq-item"><div class="faq-q">Q: ${escapeHtml(f.q)}</div><div class="faq-a">${escapeHtml(f.a)}</div></div>`
-  ).join('');
+  $('faq-body').innerHTML =
+    FAQ_CONTENT.map(
+      (f) => `<div class="faq-item"><div class="faq-q">Q: ${escapeHtml(f.q)}</div><div class="faq-a">${escapeHtml(f.a)}</div></div>`
+    ).join('') +
+    `
+    <div class="faq-item">
+      <div class="faq-q">⚙️ 自定义解析服务器（可选）</div>
+      <div class="faq-a">
+        <p>公共解析代理偶尔限流导致解析失败。自建 Cloudflare Worker 中继（免费）可彻底解决：</p>
+        <div class="copy-box"><input id="relay-input" placeholder="https://your-name.xxx.workers.dev" value="${escapeAttr(getRelay() || '')}" /></div>
+        <div class="action-row">
+          <button class="btn-action primary" id="relay-save">💾 保存</button>
+          <button class="btn-action" id="relay-clear">清除</button>
+        </div>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-2)">部署教程：项目仓库 docs/Cloudflare-Worker-中继部署.md（约 3 分钟）</p>
+      </div>
+    </div>`;
+
+  const saveBtn = document.querySelector('#relay-save');
+  const clearBtn = document.querySelector('#relay-clear');
+  const input = document.querySelector('#relay-input');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      const v = input.value.trim();
+      if (v && !/^https?:\/\//.test(v)) { toast('地址需以 https:// 开头'); return; }
+      setRelay(v);
+      toast(v ? '已保存，下次解析生效' : '已清除');
+    });
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      setRelay('');
+      input.value = '';
+      toast('已清除自定义服务器');
+    });
+  }
 }
 function renderCourse() {
   $('course-body').innerHTML = COURSE_CONTENT.map(

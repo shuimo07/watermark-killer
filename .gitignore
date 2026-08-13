@@ -38,3 +38,11 @@ Thumbs.db
 
 # corepack cache (local mirror)
 .corepack/
+
+# local test artifacts
+test-flow.html
+.chrome-test/
+
+test-app-flow.html
+
+test-video-sanity.html

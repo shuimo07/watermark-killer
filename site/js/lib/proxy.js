@@ -1,62 +1,103 @@
-// CORS 代理封装：多代理自动回退 + POST 支持
+// CORS 代理封装：自定义中继优先，多代理自动回退，错误信息带细节
 import { CONFIG } from '../config.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0';
 
-/** GET 代理链 */
-export async function proxyFetch(url, { timeout = CONFIG.timeout, headers = {} } = {}) {
-  let lastErr;
-  for (const build of CONFIG.proxies) {
+const RELAY_KEY = 'wz_relay_v1';
+
+/** 用户自建中继（localStorage 配置） */
+export function getRelay() {
+  try {
+    const r = (localStorage.getItem(RELAY_KEY) || '').trim();
+    if (r && /^https?:\/\/.+/.test(r)) return r.replace(/\/+$/, '');
+  } catch { /* ignore */ }
+  return null;
+}
+
+export function setRelay(url) {
+  try {
+    localStorage.setItem(RELAY_KEY, (url || '').trim());
+  } catch { /* ignore */ }
+}
+
+/** 把 URL 包装进代理/中继 */
+export function wrapProxy(proxy, url) {
+  return proxy + (proxy.includes('?') ? '&' : '?') + 'url=' + encodeURIComponent(url);
+}
+
+/**
+ * 通用代理请求：自定义中继 → 公共代理链 → 直连
+ * @returns {Promise<Response>}
+ */
+async function relay(method, url, { body, headers = {}, timeout = CONFIG.timeout } = {}) {
+  const attempts = [];
+  // 1) 自定义中继（若已配置）
+  const relayUrl = getRelay();
+  if (relayUrl) attempts.push(`relay:${relayUrl}`);
+  // 2) 公共代理链（按方法区分）
+  if (method === 'GET') {
+    attempts.push('proxy:corsproxy.io', 'proxy:allorigins', 'direct');
+  } else {
+    attempts.push('proxy:corsproxy.io', 'proxy:cors.eu.org', 'direct');
+  }
+
+  let lastErr = null;
+  for (const attempt of attempts) {
+    let requestUrl = url;
     try {
+      if (attempt.startsWith('relay:')) {
+        requestUrl = wrapProxy(attempt.slice(6), url);
+      } else if (attempt === 'proxy:corsproxy.io') {
+        requestUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url);
+      } else if (attempt === 'proxy:allorigins') {
+        requestUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+      } else if (attempt === 'proxy:cors.eu.org') {
+        requestUrl = 'https://cors.eu.org/' + url;
+      } else if (attempt === 'direct') {
+        requestUrl = url;
+      }
+
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), timeout);
-      const res = await fetch(build(url), {
+      const res = await fetch(requestUrl, {
+        method,
         signal: ctrl.signal,
         headers: { 'User-Agent': UA, ...headers },
+        ...(body ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {}),
       });
       clearTimeout(timer);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       return res;
     } catch (e) {
-      lastErr = e;
+      lastErr = `${attempt}: ${e.message}`;
     }
   }
-  throw new Error('代理请求失败：' + (lastErr ? lastErr.message : '所有代理不可用'));
+  throw new Error('所有通道失败 [' + attempts.join(' | ') + '] 最后错误: ' + lastErr);
 }
 
-/** POST JSON 代理链（部分代理仅支持 GET，单独维护） */
-export async function proxyJsonPost(url, body, { timeout = CONFIG.timeout } = {}) {
-  const postProxies = [
-    (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-    (u) => `https://cors-anywhere.herokuapp.com/${u}`,
-  ];
-  let lastErr;
-  for (const build of postProxies) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), timeout);
-      const res = await fetch(build(url), {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
-        body: JSON.stringify(body),
-      });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw new Error('POST 代理请求失败：' + (lastErr ? lastErr.message : '所有代理不可用'));
-}
-
+/** GET 文本 */
 export async function proxyText(url, opts) {
-  const res = await proxyFetch(url, opts);
+  const res = await relay('GET', url, opts);
   return res.text();
 }
 
+/** GET JSON */
 export async function proxyJson(url, opts) {
-  const res = await proxyFetch(url, opts);
+  const res = await relay('GET', url, opts);
   return res.json();
+}
+
+/** POST JSON */
+export async function proxyJsonPost(url, body, opts) {
+  const res = await relay('POST', url, {
+    ...opts,
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json', ...(opts && opts.headers) },
+  });
+  return res.json();
+}
+
+// 兼容旧接口
+export async function proxyFetch(url, opts) {
+  return relay('GET', url, opts);
 }
