@@ -156,6 +156,16 @@ body {
   padding: 9px 10px; font-size: 12px; color: var(--text-2); background: #fafcff;
 }
 
+/* 去水印卡片 */
+.wm-card { margin-top: 12px; background: var(--primary-light); border-radius: 10px; padding: 10px; }
+.wm-title { font-size: 13px; font-weight: 600; color: var(--primary-dark); }
+.wm-picker { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.wm-chip {
+  border: 1px solid var(--primary); background: #fff; color: var(--primary);
+  font-size: 12px; padding: 6px 12px; border-radius: 16px; cursor: pointer;
+}
+.wm-chip.active { background: var(--primary); color: #fff; font-weight: 600; }
+
 /* 历史/教程/FAQ */
 .section-title-row { display: flex; justify-content: space-between; align-items: center; }
 .faq-body, .course-body { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 14px; margin-top: 10px; }
