@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-ssr/
+*.local
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# reverse-engineering artifacts (keep out of git)
+capture/
+decompiled/
+*.wxapkg
+*.har
+*.pcap
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
