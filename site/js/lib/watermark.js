@@ -26,15 +26,27 @@ function pickMime() {
   return 'video/webm';
 }
 
-function loadVideo(url) {
+/** 先抓取为 Blob（referrer:'' 绕过防盗链 + CORS 读取），再以 objectURL 加载
+ *  → 画布永不跨域污染（captureStream 不会抛 "not origin-clean"） */
+async function loadVideo(url, onProgress) {
+  if (onProgress) onProgress(0, '正在下载视频…');
+  let res;
+  try {
+    res = await fetch(url, { mode: 'cors', referrer: '' });
+  } catch (e) {
+    throw new Error('视频下载失败：' + e.message);
+  }
+  if (!res.ok) throw new Error('视频下载失败：HTTP ' + res.status);
+  const blob = await res.blob();
+  if (onProgress) onProgress(1, '视频已就绪，开始处理…');
+
   return new Promise((resolve, reject) => {
     const v = document.createElement('video');
     v.playsInline = true;
     v.muted = true; // 静音播放：自动播放策略不拦截（手势会在异步加载期间过期）
-    v.setAttribute('referrerpolicy', 'no-referrer');
     v.style.cssText = 'position:fixed;opacity:0;width:2px;height:2px;pointer-events:none;';
     document.body.appendChild(v); // 挂载到 DOM：保证 rAF/rVFC 正常触发
-    v.src = url;
+    v.src = URL.createObjectURL(blob);
     v.onloadeddata = () => resolve(v);
     v.onerror = () => reject(new Error('视频加载失败'));
     setTimeout(() => reject(new Error('视频加载超时（20秒）')), 20000);
@@ -49,7 +61,7 @@ function loadVideo(url) {
  */
 export async function removeWatermarkByCrop(url, { corner = 'br', ratio = 0.12 } = {}, onProgress) {
   const spec = CORNERS[corner] || CORNERS.br;
-  const video = await loadVideo(url);
+  const video = await loadVideo(url, onProgress);
   try {
     const w = video.videoWidth;
     const h = video.videoHeight;

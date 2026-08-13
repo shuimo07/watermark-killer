@@ -49,3 +49,12 @@ test-video-sanity.html
 
 # local temp (E drive redirect)
 .tmp/
+
+test-wm.html
+
+test-mime.html
+
+test-wm2.html
+
+test-wm3.html
+.chrome-cdp/
