@@ -476,6 +476,16 @@ function renderFaq() {
       (f) => `<div class="faq-item"><div class="faq-q">Q: ${escapeHtml(f.q)}</div><div class="faq-a">${escapeHtml(f.a)}</div></div>`
     ).join('') +
     `
+    <div class="faq-item" style="background:var(--primary-light);border-radius:10px;padding:10px 14px">
+      <div class="faq-q">🎯 真·无水印（免登录态外传，拖一下就能装）</div>
+      <div class="faq-a">
+        <p>把下面按钮<b>拖到浏览器书签栏</b>（按住拖过去），然后：打开豆包视频分享页（已登录）→ 点书签 → 下载真·无水印 mp4。</p>
+        <div class="action-row">
+          <a class="btn-action primary" id="bookmarklet-link" style="text-decoration:none;text-align:center"
+             href="javascript:(function(){var s=document.createElement('script');s.src='https://shuimo07.github.io/watermark-killer/tools/doubao-nomark.user.js';document.body.appendChild(s);})();">⬇️ 拖我到书签栏</a>
+        </div>
+      </div>
+    </div>
     <div class="faq-item">
       <div class="faq-q">⚙️ 自定义解析服务器（可选）</div>
       <div class="faq-a">
