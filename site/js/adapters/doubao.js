@@ -49,6 +49,7 @@ export async function parse(text, url) {
     title: '豆包AI视频' + sizeNote,
     cover: d.poster_url || '',
     mediaUrl: mainUrl,
+    vid,
     images: [],
     desc: '',
   };

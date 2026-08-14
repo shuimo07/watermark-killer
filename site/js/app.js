@@ -5,7 +5,7 @@ import { parse } from './adapters/index.js';
 import { getHistory, addHistory, removeHistory, clearHistory } from './lib/history.js';
 import { fetchBlob, saveBlob, makeFilename, extFromUrl } from './lib/download.js';
 import { copyText, shareData } from './lib/share.js';
-import { getRelay, setRelay } from './lib/proxy.js';
+import { getRelay, setRelay, getWorker, setWorker } from './lib/proxy.js';
 import { removeWatermarkByCrop, WATERMARK_CORNERS } from './lib/watermark.js';
 import { FAQ_CONTENT } from './views/faq.js';
 import { COURSE_CONTENT } from './views/course.js';
@@ -220,6 +220,7 @@ function renderResult(r) {
     actions = `
       <div class="action-row">
         ${r.platform === 'doubao' ? `<button class="btn-action primary" id="act-wm">⏳ 处理中…</button>` : ''}
+        ${r.platform === 'doubao' && getWorker() ? `<button class="btn-action" id="act-real">✨ 真·无水印</button>` : ''}
         <button class="btn-action ${r.platform === 'doubao' ? '' : 'primary'}" id="act-download">${r.platform === 'doubao' ? '⬇️ 原视频' : '⬇️ 下载视频'}</button>
         <button class="btn-action" id="act-copy">📋 复制链接</button>
         <button class="btn-action" id="act-share">↗️ 分享</button>
@@ -290,10 +291,37 @@ function renderResult(r) {
     });
   }
   bind('act-wm', () => downloadWatermark(r));
+  bind('act-real', () => downloadRealNowm(r));
 
   // 豆包视频：解析完成后自动去水印
   if (r.platform === 'doubao' && r.mediaUrl) {
     runWatermark(r);
+  }
+}
+
+/** 真·无水印下载（调用自建后端，逐像素零 logo） */
+async function downloadRealNowm(r) {
+  const worker = getWorker();
+  if (!worker || !r.vid) { toast('未配置真·无水印后端或缺少视频 ID'); return; }
+  const btn = document.querySelector('#act-real');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '解析中…';
+  toast('正在从后端获取真·无水印链接…', 2500);
+  try {
+    const res = await fetch(`${worker}/?video_id=${encodeURIComponent(r.vid)}`);
+    const j = await res.json();
+    if (j.code !== 0) throw new Error(j.msg || '后端返回异常');
+    if (!j.url) throw new Error('后端未返回链接');
+    toast('正在下载真·无水印视频…', 2500);
+    const blob = await fetchBlob(j.url);
+    saveBlob(blob, makeFilename(r.platform + '_nomark', extFromUrl(j.url)));
+    toast('已下载真·无水印视频');
+  } catch (e) {
+    toast('真·无水印失败：' + (e.message || '未知错误'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
   }
 }
 
@@ -459,6 +487,18 @@ function renderFaq() {
         </div>
         <p style="margin-top:8px;font-size:12px;color:var(--text-2)">部署教程：项目仓库 docs/Cloudflare-Worker-中继部署.md（约 3 分钟）</p>
       </div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">✨ 真·无水印后端（可选，逐像素零 logo）</div>
+      <div class="faq-a">
+        <p>网页版只能裁剪遮挡。要「保留原画面、逐像素、零 logo」的真无水印，需自建后端（豆包登录态）。部署约 5 分钟：</p>
+        <div class="copy-box"><input id="worker-input" placeholder="https://your-name.xxx.workers.dev" value="${escapeAttr(getWorker() || '')}" /></div>
+        <div class="action-row">
+          <button class="btn-action primary" id="worker-save">💾 保存</button>
+          <button class="btn-action" id="worker-clear">清除</button>
+        </div>
+        <p style="margin-top:8px;font-size:12px;color:var(--text-2)">部署教程：项目仓库 docs/豆包后端部署.md（cookie 存 Cloudflare Secret，切勿外传）</p>
+      </div>
     </div>`;
 
   const saveBtn = document.querySelector('#relay-save');
@@ -477,6 +517,24 @@ function renderFaq() {
       setRelay('');
       input.value = '';
       toast('已清除自定义服务器');
+    });
+  }
+  const wSave = document.querySelector('#worker-save');
+  const wClear = document.querySelector('#worker-clear');
+  const wInput = document.querySelector('#worker-input');
+  if (wSave) {
+    wSave.addEventListener('click', () => {
+      const v = wInput.value.trim();
+      if (v && !/^https?:\/\//.test(v)) { toast('地址需以 https:// 开头'); return; }
+      setWorker(v);
+      toast(v ? '已保存，重新解析豆包视频后生效' : '已清除');
+    });
+  }
+  if (wClear) {
+    wClear.addEventListener('click', () => {
+      setWorker('');
+      wInput.value = '';
+      toast('已清除真·无水印后端');
     });
   }
 }

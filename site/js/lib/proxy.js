@@ -20,6 +20,23 @@ export function setRelay(url) {
   } catch { /* ignore */ }
 }
 
+const WORKER_KEY = 'wz_worker_v1';
+
+/** 用户自建「真·无水印」后端（Cloudflare Worker，localStorage 配置） */
+export function getWorker() {
+  try {
+    const r = (localStorage.getItem(WORKER_KEY) || '').trim();
+    if (r && /^https?:\/\/.+/.test(r)) return r.replace(/\/+$/, '');
+  } catch { /* ignore */ }
+  return null;
+}
+
+export function setWorker(url) {
+  try {
+    localStorage.setItem(WORKER_KEY, (url || '').trim());
+  } catch { /* ignore */ }
+}
+
 /** 把 URL 包装进代理/中继 */
 export function wrapProxy(proxy, url) {
   return proxy + (proxy.includes('?') ? '&' : '?') + 'url=' + encodeURIComponent(url);
