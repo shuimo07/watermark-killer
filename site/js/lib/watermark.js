@@ -1,6 +1,7 @@
 // 去水印处理：裁剪掉水印区域后本地重编码导出（纯前端，无需登录）
-// 兼容性要点：webm(vp8/vp9) 优先（Chromium/Edge 最稳）；mp4 仅作 Safari 回退；
-// 视频/画布挂载到 DOM（否则部分浏览器 rAF/rVFC 不触发导致空输出）；失败自动无音频重试
+// 输出：mp4 优先（Chromium 支持 H.264 录制），webm 仅作兜底（Firefox 等）
+// 兼容性要点：Blob 优先加载（避免 canvas 跨域污染）；静音播放绕过自动播放策略；
+// 视频/画布挂载 DOM（保证绘制循环触发）；mp4 空输出自动重试（无音频 → webm）
 
 const CORNERS = {
   all: { label: '全局（四边）', crop: (w, h, r) => ({ x: Math.round(w * r), y: Math.round(h * r), w: Math.round(w * (1 - 2 * r)), h: Math.round(h * (1 - 2 * r)) }) },
@@ -12,19 +13,19 @@ const CORNERS = {
 
 export const WATERMARK_CORNERS = CORNERS;
 
-/** webm 优先，mp4 兜底（Safari） */
-function pickMime() {
+/** mp4 优先，webm 兜底 */
+function pickMimes() {
   const candidates = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4;codecs=avc1',
+    'video/mp4',
     'video/webm;codecs=vp9',
     'video/webm;codecs=vp8',
     'video/webm',
-    'video/mp4',
-    'video/mp4;codecs=avc1',
   ];
-  for (const m of candidates) {
-    try { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; } catch { /* ignore */ }
-  }
-  return 'video/webm';
+  return candidates.filter((m) => {
+    try { return window.MediaRecorder && MediaRecorder.isTypeSupported(m); } catch { return false; }
+  });
 }
 
 /** 先抓取为 Blob（referrer:'' 绕过防盗链 + CORS 读取），再以 objectURL 加载
@@ -54,14 +55,24 @@ async function loadVideo(url, onProgress) {
   });
 }
 
+/** 重播到开头（静音播放后再恢复音频，规避自动播放策略） */
+async function resetPlay(video) {
+  video.muted = true;
+  video.currentTime = 0;
+  await video.play().catch(() => {});
+  await new Promise((r) => setTimeout(r, 400));
+  video.muted = false;
+  video.volume = 0;
+}
+
 /**
  * 裁剪重编码去水印
  * @param {string} url 视频地址
  * @param {object} opts { corner, ratio }
  * @param {(p:number, msg:string)=>void} onProgress
  */
-export async function removeWatermarkByCrop(url, { corner = 'br', ratio = 0.12 } = {}, onProgress) {
-  const spec = CORNERS[corner] || CORNERS.br;
+export async function removeWatermarkByCrop(url, { corner = 'all', ratio = 0.10 } = {}, onProgress) {
+  const spec = CORNERS[corner] || CORNERS.all;
   const video = await loadVideo(url, onProgress);
   try {
     const w = video.videoWidth;
@@ -76,12 +87,10 @@ export async function removeWatermarkByCrop(url, { corner = 'br', ratio = 0.12 }
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
 
-    const mime = pickMime();
-    const isMp4 = mime.indexOf('mp4') !== -1;
+    const mimes = pickMimes();
+    if (!mimes.length) throw new Error('当前浏览器不支持视频编码');
 
     await video.play();
-
-    // 播放确认后恢复音频（captureStream 取原始音频数据，不受音量影响）
     await new Promise((r) => setTimeout(r, 1200));
     if (video.currentTime < 0.05 && video.duration > 1) {
       throw new Error('视频未能开始播放，请检查网络后重试');
@@ -89,14 +98,7 @@ export async function removeWatermarkByCrop(url, { corner = 'br', ratio = 0.12 }
     video.muted = false;
     video.volume = 0;
 
-    // 绘制循环（rAF 为主，稳定跨浏览器）
-    let rafId = 0;
-    const draw = () => ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
-    const loop = () => { draw(); rafId = requestAnimationFrame(loop); };
-    draw(); // 预热一帧
-    loop();
-
-    // 音轨（可选，失败自动无音频重试）
+    // 音轨（可选）
     let audioTrack = null;
     try {
       const vs = video.captureStream ? video.captureStream() : null;
@@ -104,15 +106,34 @@ export async function removeWatermarkByCrop(url, { corner = 'br', ratio = 0.12 }
       if (at && at.length) audioTrack = at[0];
     } catch { /* ignore */ }
 
-    let blob = await record(canvas, video, { mime, audioTrack, onProgress, duration: video.duration });
-    if (blob.size < 1000 && audioTrack) {
-      // 音频轨疑似导致空输出 → 重试一次不带音频
-      blob = await record(canvas, video, { mime, audioTrack: null, onProgress, duration: video.duration });
+    // 绘制循环
+    let rafId = 0;
+    const draw = () => ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+    const loop = () => { draw(); rafId = requestAnimationFrame(loop); };
+    draw(); // 预热一帧
+    loop();
+
+    video.currentTime = 0; // 回卷到开头，确保录制覆盖全片（seek 不触发自动播放策略）
+
+    // 编码尝试链：mp4(带音频) → mp4(无音频) → webm(无音频)
+    let blob = null;
+    let ext = 'webm';
+    outer: for (const mime of mimes) {
+      const attempts = mime.indexOf('mp4') !== -1 ? [audioTrack, null] : [null];
+      for (const at of attempts) {
+        if (blob && blob.size >= 1000) break outer;
+        if (video.ended || video.currentTime >= video.duration - 0.05) await resetPlay(video);
+        blob = await record(canvas, video, { mime, audioTrack: at, onProgress, duration: video.duration });
+        if (blob.size >= 1000) {
+          ext = mime.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
+          break outer;
+        }
+      }
     }
-    if (blob.size < 1000) {
-      throw new Error('处理输出为空（浏览器编码器异常），请改用 Chrome/Edge 最新版重试');
+    if (!blob || blob.size < 1000) {
+      throw new Error('处理输出为空（浏览器编码器异常），请换用 Chrome/Edge 最新版重试');
     }
-    return { blob, ext: isMp4 ? 'mp4' : 'webm' };
+    return { blob, ext };
   } finally {
     video.pause();
     video.removeAttribute('src');

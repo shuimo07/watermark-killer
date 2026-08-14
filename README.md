@@ -28,7 +28,7 @@
   1. 解析：`POST https://www.doubao.com/samantha/media/get_play_info`（`{"key": video_id}`）→ 取视频直链
   2. 预览：`<video>` 直链（referrerpolicy 防防盗链）+ 失败自动 Blob 降级
   3. 下载：`fetch(url, {referrer:''})` 直连（CDN 自带 CORS）
-  4. **去水印**：裁剪水印区域（右下角等）→ canvas + MediaRecorder 本地重编码导出 webm
+  4. **去水印**：裁剪水印区域（右下角等）→ canvas + MediaRecorder 本地重编码导出 **mp4**（不支持时回退 webm）
 - 其他平台适配器：抖音 / 快手 / 微视 / 微博 / 小红书 / 淘宝（尽力而为，未逐一实测）
 - CORS 代理链：corsproxy.io → cors.eu.org → 直连，自动回退；支持自定义 Cloudflare Worker 中继（见 `docs/Cloudflare-Worker-中继部署.md`）
 - 历史记录（localStorage）、解析缓存、FAQ/教程
@@ -41,7 +41,7 @@
 
 ## 重要说明
 
-豆包分享链接的**公开接口只能获取带水印成片**（无水印源版本需豆包登录态，属平台限制）。本工具通过**本地裁剪重编码**实现去水印，输出为 webm 格式。追求逐像素无损无水印可配合登录态油猴脚本（见 FAQ）。
+豆包分享链接的**公开接口只能获取带水印成片**（无水印源版本需豆包登录态，属平台限制）。本工具通过**本地裁剪重编码**实现去水印，默认输出 **mp4**（浏览器不支持时回退 webm）。
 
 ## 合规声明
 
