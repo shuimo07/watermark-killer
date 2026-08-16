@@ -21,11 +21,51 @@
     <!-- 首页 -->
     <section id="view-home" class="view active">
       <div class="home-hero">
-        <h1 class="hero-title">粘贴链接，去水印下载</h1>
-        <p class="hero-desc">支持豆包 AI 视频分享链接去水印</p>
+        <h1 class="hero-title">丢进视频，自动去水印</h1>
+        <p class="hero-desc">豆包等 AI 生成视频 · 自动检测水印 · 输出无水印 mp4</p>
       </div>
+
+      <!-- 本地文件去水印（主流程） -->
+      <div class="wm-card hero-card" id="wm-card">
+        <div class="wm-title">📁 本地视频去水印（拖入文件）</div>
+        <div class="dropzone" id="wm-dropzone" role="button" tabindex="0" aria-label="上传视频">
+          <div class="dropzone-inner">
+            <div class="dz-icon">🎬</div>
+            <p id="wm-hint" class="dz-text">点击选择或拖入 <b>mp4 / mov / webm</b><br /><span>豆包 AI 视频直接丢进来即可</span></p>
+            <input type="file" id="wm-file-input" accept="video/*,.mp4,.mov,.webm,.mkv,.avi,.m4v" hidden />
+          </div>
+        </div>
+        <div id="wm-file-card" class="wm-file-card hidden">
+          <div id="wm-file-meta" class="wm-file-meta"></div>
+          <div class="wm-file-actions">
+            <button class="btn-action primary" id="wm-detect-btn">🔍 重新检测</button>
+            <button class="btn-action" id="wm-clear-btn">🗑️ 清空水印框</button>
+          </div>
+        </div>
+        <div id="wm-preview-wrap" class="hidden">
+          <canvas id="wm-preview" class="wm-preview"></canvas>
+          <p class="wm-tip">蓝色框为检测到的水印：拖动移动、拖角缩放、点击空白处添加新框</p>
+        </div>
+        <div id="wm-status" class="status-area"></div>
+        <div id="wm-progress" class="wm-progress hidden">
+          <div class="wm-progress-track"><div id="wm-progress-bar" class="wm-progress-bar" style="width:0%"></div></div>
+          <div id="wm-log" class="wm-log"></div>
+        </div>
+        <button class="btn-primary" id="wm-start-btn" disabled>✂️ 一键去水印 → 输出 mp4</button>
+        <div id="wm-result-wrap" class="wm-result hidden">
+          <div class="wm-title">✅ 无水印视频已生成（mp4）</div>
+          <div class="video-wrap"><video controls playsinline id="wm-result-video"></video></div>
+          <div class="action-row">
+            <button class="btn-action primary" id="wm-download-btn">⬇️ 下载 mp4</button>
+            <button class="btn-action" id="wm-again-btn">🔄 处理另一个</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 链接解析（备选流程） -->
       <div class="input-card">
-        <textarea id="share-input" rows="4" placeholder="粘贴豆包视频分享链接，如：https://www.doubao.com/video-sharing?source_type=mobile&amp;share_id=xxx&amp;video_id=xxx"></textarea>
+        <div class="wm-title" style="margin-bottom:8px">🔗 或粘贴分享链接解析（豆包等平台）</div>
+        <textarea id="share-input" rows="3" placeholder="粘贴豆包视频分享链接，如：https://www.doubao.com/video-sharing?source_type=mobile&amp;share_id=xxx&amp;video_id=xxx"></textarea>
         <div id="detect-bar" class="detect-bar hidden"></div>
         <button id="parse-btn" class="btn-primary">开始解析</button>
         <p class="input-tip">粘贴后自动识别平台 · 仅解析您有权使用的内容</p>

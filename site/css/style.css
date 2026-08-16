@@ -166,6 +166,65 @@ body {
 }
 .wm-chip.active { background: var(--primary); color: #fff; font-weight: 600; }
 
+/* 本地文件去水印（主流程） */
+.hero-card { margin-top: 0; padding: 14px; background: var(--card); box-shadow: var(--shadow); }
+.dropzone {
+  margin-top: 10px;
+  border: 2px dashed var(--primary);
+  border-radius: 12px;
+  background: #f7fbff;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: center;
+}
+.dropzone.drag-over { background: var(--primary-light); border-color: var(--primary-dark); }
+.dropzone-inner { padding: 22px 12px; }
+.dz-icon { font-size: 34px; }
+.dz-text { margin-top: 8px; font-size: 14px; color: var(--text); line-height: 1.7; }
+.dz-text b { color: var(--primary); }
+.dz-text span { font-size: 12px; color: var(--text-2); }
+
+.wm-file-card { margin-top: 10px; }
+.wm-file-meta {
+  font-size: 12px; color: var(--text-2);
+  background: #f0f6ff; border-radius: 8px; padding: 8px 10px;
+  word-break: break-all;
+}
+.wm-file-actions { display: flex; gap: 8px; margin-top: 8px; }
+.wm-file-actions .btn-action { flex: 1; min-width: 0; padding: 9px 0; font-size: 13px; }
+
+.wm-preview {
+  width: 100%;
+  margin-top: 10px;
+  background: #000;
+  border-radius: 10px;
+  touch-action: none;
+  cursor: crosshair;
+  display: block;
+}
+.wm-tip { font-size: 11px; color: var(--text-2); margin-top: 6px; line-height: 1.6; }
+
+.wm-progress { margin-top: 10px; }
+.wm-progress-track {
+  height: 8px; border-radius: 4px; background: #e3ecf7; overflow: hidden;
+}
+.wm-progress-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+  border-radius: 4px;
+  transition: width 0.25s ease;
+}
+.wm-log {
+  margin-top: 8px;
+  max-height: 110px; overflow-y: auto;
+  background: #0f1720; color: #9fd0ff;
+  border-radius: 8px; padding: 8px 10px;
+  font-size: 11px; font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.7;
+}
+.wm-result { margin-top: 12px; }
+.wm-result .video-wrap { margin-top: 8px; }
+
 /* 历史/教程/FAQ */
 .section-title-row { display: flex; justify-content: space-between; align-items: center; }
 .faq-body, .course-body { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px 14px; margin-top: 10px; }

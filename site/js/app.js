@@ -7,6 +7,7 @@ import { fetchBlob, saveBlob, makeFilename, extFromUrl } from './lib/download.js
 import { copyText, shareData } from './lib/share.js';
 import { getRelay, setRelay, getWorker, setWorker } from './lib/proxy.js';
 import { removeWatermarkByCrop, WATERMARK_CORNERS } from './lib/watermark.js';
+import { initFileWM } from './lib/filewm.js';
 import { FAQ_CONTENT } from './views/faq.js';
 import { COURSE_CONTENT } from './views/course.js';
 
@@ -576,6 +577,7 @@ function init() {
   renderRecent();
   renderFaq();
   renderCourse();
+  initFileWM();
   showView('home');
 }
 
